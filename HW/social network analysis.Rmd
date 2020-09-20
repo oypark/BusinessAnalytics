@@ -1,0 +1,144 @@
+---
+title: "Social Network Analysis"
+author: "Okyoung Park"
+date: '2020 9 20 '
+output:
+  html_document:
+    df_print: paged
+---
+## 연습하기
+
+### 1. 패키지 설치 및 기본 세팅
+```{r}
+#install.packages(c('tidygraph', 'ggraph'))
+library('tidygraph')
+library('ggraph')
+
+getwd()
+
+feat <- read.csv('featuring.csv')   #파일 불러오기
+head(feat)
+class(feat)   
+
+fg <- as_tbl_graph(feat)  #tibble 그래프 형식으로 바꾸기
+class(fg)
+
+fg   #node data(9x1)와 edge data(12x2) 확인
+
+plot(fg)   #그래프 그리기
+
+```
+
+### 2. 그래프 그리기
+```{r}
+ggraph(fg, layout = 'gem') +  geom_node_point()  +  geom_edge_link()
+
+feat %>%
+  as_tbl_graph() %>%    #그래프로 변환
+  ggraph(layout='kk') +     #레이아웃 지정
+  geom_node_text(aes(label=name)) +    #node는 text로, 라벨은 이름으로 지정
+  geom_edge_link(aes(start_cap = label_rect(node1.name), end_cap = label_rect(node2.name)))    #edge는 link로, 시작은 node1의 이름, 끝은 node2의 이름으로 지정
+
+```
+
+### 3. 중심성 척도 측정
+* 매개 중심성: centrality_betweenness()
+* 근접 중심성: centrality_closeness()
+* 고유벡터 중심성: centrality_eigen()
+* 페이지랭크: centrality_pagerank()
+* 연결 중심성: centrality_degree()
+```{r}
+fg %>% 
+  mutate(bet = centrality_betweenness()) %>%   #매개 중심성 계산
+  as_tibble %>%   #tibble로 변환
+  arrange(desc(bet))    #bet 열 기준, 내림차순으로 데이터 정렬
+
+fg %>% 
+  mutate(bet=centrality_betweenness(),    #매개 중심성
+             clo=centrality_closeness()) %>%    #근접 중심성성
+  as_tibble
+
+```
+
+### 4. 노드간 평균 거리 측정
+```{r}
+fg %>%
+  with_graph(graph_mean_dist())
+
+```
+
+
+## 실습하기
+
+### 2018년 12월 ~ 2019년 11월 음반 피처링 관계도 그리기
+```{r}
+#install.packages("tidyverse")
+library(tidyverse)
+
+feat2 <- read.csv('featuring_2019.csv')
+head(feat2)
+
+
+#기본적인 그래프 그리기 
+feat2 %>% 
+  as_tbl_graph(directed=FALSE) %>% 
+  ggraph(layout = 'nicely') + 
+    geom_edge_link() +
+    geom_node_point() +
+    geom_node_text(aes(label=name))
+  
+
+#연결 중심성, 노드 그룹 알아보기
+feat2 %>% 
+  as_tbl_graph(directed=FALSE) %>%
+  mutate(degree = centrality_degree(),   #많은 노드들과 이웃해 있는지, 연결 중심성 계산
+         group = group_infomap())    #그룹 정보 알아보기 
+
+
+#기본 그래프에서 점/선/레이블의 색깔/크기 조절
+feat2 %>%
+  as_tbl_graph(directed=FALSE) %>%
+  mutate(degree = centrality_degree(),
+         group = group_infomap()) %>%
+  ggraph(layout = 'nicely') +
+    geom_edge_link() +
+    geom_node_point(aes(color=factor(group),   size=degree)) +    #노드 점 색깔 지정, 크기 지정
+    geom_node_text(aes(label=name))    #레이블 이름 지정
+
+feat2 %>%
+  as_tbl_graph(directed=FALSE) %>%
+  activate(nodes) %>%
+  mutate(degree = centrality_degree(),
+         group = group_infomap()) %>%
+  ggraph(layout = 'nicely') +
+    geom_edge_link(color='gray50') +    #엣지 선 색깔 지정
+    geom_node_point(aes(color=factor(group), size=degree)) +
+    geom_node_text(aes(label=name), size=3)   #레이블 크기 지정 
+
+
+#중요한 노드들을 이웃하고 있는지, 아이겐 중심성 측정
+feat2 %>%
+  as_tbl_graph(directed=FALSE) %>% 
+  activate(nodes) %>%
+  mutate(eigen = centrality_eigen(),   #아이겐(고유벡터) 중심성 계산
+    group = group_infomap()) %>%
+  ggraph(layout = 'nicely') +
+    geom_edge_link(color='gray50', alpha=.2) +   #선 투명도 20%로 내리기
+    geom_node_point(aes(color=factor(group), size=eigen)) +
+    geom_node_text(aes(label=name), size=3, repel=TRUE)   #레이블 겹치지 않도록 repel=TRUE로 설정
+
+
+#범례, 배경 없애기
+feat2 %>%
+  as_tbl_graph(directed=FALSE) %>%
+  activate(nodes) %>%
+  mutate(eigen = centrality_eigen(),
+         group = group_infomap()) %>%
+  ggraph(layout='nicely') +
+    geom_edge_link(color='gray50', alpha=.2, arrow=NULL) +
+    geom_node_point(aes(color=factor(group), size=eigen)) +
+    geom_node_text(aes(label=name), size=3, repel=TRUE) +
+    theme_graph() +   #배경 없애기
+    theme(legend.position='none')    #범례 없애기
+
+```
